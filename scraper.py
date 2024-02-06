@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 
 
 visited_urls = set()
+unique_urls = set()
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -31,6 +32,12 @@ def extract_next_links(url, resp):
             if is_valid(link) and link not in visited_urls:
                 links.append(link)
                 visited_urls.add(link)
+                end_index = link.find("#")
+                link_without_fragment = link[0:end_index+1]
+                if end_index < 0: # If no fragment
+                    unique_urls.add(link)
+                else: # If fragment
+                    unique_urls.add(link_without_fragment)
     print(links)
     return links
 
