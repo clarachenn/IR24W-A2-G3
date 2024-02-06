@@ -27,7 +27,7 @@ def extract_next_links(url, resp):
     new_unique_urls = set()
     if is_valid(url) and resp.status == 200:
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
-        print(soup.get_text())
+        tokenize_text(soup.get_text())
         a_tags = soup.find_all("a", href=True)
         for a_tag in a_tags:
             link = a_tag.get('href')
@@ -45,7 +45,6 @@ def extract_next_links(url, resp):
                     if link not in unique_urls:
                         new_unique_urls.add(link)
                     unique_urls.add(link_without_fragment)
-    sys.exit()
     return links
 
 
@@ -73,3 +72,22 @@ def is_valid(url):
     except TypeError:
         print ("TypeError for ", parsed)
         raise
+
+
+def tokenize_text(text: str):
+    lowercase_content = text.lower()  # convert all words to lowercase
+    tokens = re.split(r'[^a-zA-Z0-9]', lowercase_content.strip())  # tokens can only be alphanumeric
+    token_list = list(filter(None, tokens))
+
+    try:
+        token_frequency = {}
+        for token in token_list:
+            if token in token_frequency:  # if the key exists, increment its frequency
+                token_frequency[token] += 1
+            else:  # if the key doesn't exist, add it to the dictionary and update its frequency
+                token_frequency[token] = 1
+        print(token_frequency)
+        sys.exit()
+    except Exception as e:
+        print(e)
+    
