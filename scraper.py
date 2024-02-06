@@ -32,11 +32,14 @@ def extract_next_links(url, resp):
             if is_valid(link) and link not in visited_urls:
                 links.append(link)
                 visited_urls.add(link)
+                # find the index of the fragment
                 end_index = link.find("#")
-                link_without_fragment = link[0:end_index+1]
-                if end_index < 0: # If no fragment
+                link_without_fragment = link[0:end_index]
+                # adds the url to unique_urls if there is no fragment
+                if end_index < 0:  
                     unique_urls.add(link)
-                else: # If fragment
+                # adds the url to unique_urls without the fragment
+                else:  
                     unique_urls.add(link_without_fragment)
     print(links)
     return links
