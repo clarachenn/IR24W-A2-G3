@@ -29,7 +29,7 @@ def extract_next_links(url, resp):
             if is_valid(link) and link not in visited_urls:
                 links.append(link)
                 visited_urls.add(link)
-
+    print(links)
     return links
 
 
@@ -41,6 +41,8 @@ def is_valid(url):
     try:
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        if ((".ics.uci.edu/" not in url) and (".cs.uci.edu/" not in url) and (".informatics.uci.edu/" not in url) and (".stat.uci.edu/" not in url)):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
