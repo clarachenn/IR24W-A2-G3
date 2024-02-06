@@ -1,6 +1,8 @@
+# Juan, Athena, Clara, Laila
 import re
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+
 
 visited_urls = set()
 
