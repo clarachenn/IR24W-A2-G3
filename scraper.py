@@ -1,5 +1,6 @@
 # Juan, Athena, Clara, Laila
 import re
+import sys
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
@@ -23,9 +24,10 @@ def extract_next_links(url, resp):
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
 
     links = []
-
+    new_unique_urls = set()
     if is_valid(url) and resp.status == 200:
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
+        print(soup.get_text())
         a_tags = soup.find_all("a", href=True)
         for a_tag in a_tags:
             link = a_tag.get('href')
@@ -35,13 +37,15 @@ def extract_next_links(url, resp):
                 # find the index of the fragment
                 end_index = link.find("#")
                 link_without_fragment = link[0:end_index]
-                # adds the url to unique_urls if there is no fragment
-                if end_index < 0:  
+                if end_index < 0: # If no fragment
+                    if link not in unique_urls:
+                        new_unique_urls.add(link)
                     unique_urls.add(link)
-                # adds the url to unique_urls without the fragment
-                else:  
+                else: # If fragment
+                    if link not in unique_urls:
+                        new_unique_urls.add(link)
                     unique_urls.add(link_without_fragment)
-    print(links)
+    sys.exit()
     return links
 
 
@@ -62,7 +66,7 @@ def is_valid(url):
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
             + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-            + r"|epub|dll|cnf|tgz|sha1"
+            + r"|epub|dll|cnf|tgz|sha1|java|py|db"
             + r"|thmx|mso|arff|rtf|jar|csv"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
 
