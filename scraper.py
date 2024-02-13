@@ -1,18 +1,64 @@
-# Juan, Athena, Clara, Laila
+# BY: Juan, Athena, Clara, Laila
+
 import re
-import sys
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
 
-visited_urls = set()
-unique_urls = set()
+token_frequency = {}  # get the frequency of all the words processed from accross all documents
+max_file = 0  # largest number of words (for largest document)
+max_page = ""  # the largest document
+subdomain_dict = {}  # keep track of subdomains found in the ics.uci.edu domain
+visited_urls = set()  # documents that have been seen and processed
+frontier_urls = set()  # documents not processed yet
+unique_urls = set()  # all the visited urls, without the fragment
+stop_words = ["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such", "than", "that", "that's", "the", "their", "theirs", "them", "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were", "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"]
+fingerprint_set = set() # set of all the fingerprints of visited sites
+checksum_set = set()
+max_redirects = 20
+
+
+def write_result():
+    sorted_token_frequency = sorted(token_frequency.items(), key=lambda x: x[1], reverse=True)
+    top_50_words = sorted_token_frequency[:50]
+
+    with open("crawler_results.txt", "w") as file:
+        file.write("1. Unique Pages:\n")
+        file.write(str(len(unique_urls)))
+        file.write("\n")
+
+        for url in unique_urls:
+            file.write(f"{url}")
+            file.write("\n")
+
+        file.write("\n")
+        file.write("\n")
+
+        file.write("2. Longest Page:\n")
+        file.write(max_page)
+        file.write("\n")
+        file.write(str(max_file))
+
+        file.write("\n")
+        file.write("\n")
+
+        file.write("3. 50 Most Common Words:\n")
+        for word, frequency in top_50_words:
+            file.write(f"{word}:, Frequency: {frequency}")
+            file.write("\n")
+        file.write("\n")
+
+        file.write("4. Subdomains Found:\n")
+        file.write(str(len(subdomain_dict.keys())))
+        file.write("\n")
+
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
 
-def extract_next_links(url, resp):
+
+def extract_next_links(url, resp, redirects_followed=0):
     # Implementation required.
     # url: the URL that was used to get the page
     # resp.url: the actual url of the page
@@ -24,29 +70,87 @@ def extract_next_links(url, resp):
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
 
     links = []
-    new_unique_urls = set()
-    if is_valid(url) and resp.status == 200:
-        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
-        tokenize_text(soup.get_text())
-        a_tags = soup.find_all("a", href=True)
-        for a_tag in a_tags:
-            link = a_tag.get('href')
-            if is_valid(link) and link not in visited_urls:
-                links.append(link)
-                visited_urls.add(link)
-                # find the index of the fragment
-                end_index = link.find("#")
-                link_without_fragment = link[0:end_index]
-                if end_index < 0: # If no fragment
-                    if link not in unique_urls:
-                        new_unique_urls.add(link)
-                    unique_urls.add(link)
-                else: # If fragment
-                    if link not in unique_urls:
-                        new_unique_urls.add(link)
-                    unique_urls.add(link_without_fragment)
-    return links
 
+    # while resp.status >= 300 and resp.status < 400 and redirects_followed < max_redirects:
+    #     if 'Location' in resp.raw_response.headers:
+    #         url = resp.headers['Location']
+    #         redirects_followed += 1
+    #         return extract_next_links(url, resp, redirects_followed)
+
+    
+    # if redirects_followed == max_redirects:
+    #     return []
+
+    if is_valid(url) and resp.status == 200:
+        # finding the largest document
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
+        visited_urls.add(url)
+
+        # tokenizes each webpage
+        page_dict, token_list = tokenize_text(soup.get_text())
+
+        # dont crawl if page has too little or too much information
+        if len(token_list) < 50 or len(token_list) > 5000:
+            return []
+
+        # updates the largest file
+        update_max(token_list, url)
+        # updates the subdomain list
+        update_subdomains(url)
+
+        # get the fingerprint of each file
+        fingerprint = simhash(page_dict)
+
+        # get the sum of all tokens of each file 
+        checksum_res = checksum(token_list)
+        
+        near_duplicate = False
+
+        # check if the page is an exact duplicate 
+        if checksum_res in checksum_set:
+            return []
+        else:
+            checksum_set.add(checksum_res)
+
+        # TODO: add to file to check
+        if (fingerprint not in fingerprint_set):
+            for i in range(16):
+                # make a copy of the original fingerprint
+                new_fingerprint = list(fingerprint)
+                # flip 1 bit at a time to detect near similarity
+                if new_fingerprint[i] == "1":
+                    new_fingerprint[i] = "0"
+                else:
+                     new_fingerprint[i] = "1"
+                if "".join(new_fingerprint) in fingerprint_set:
+                    fingerprint_set.add(fingerprint)
+                    near_duplicate = True
+                    break
+                    
+        # check if fingerprint already exists to detect exact similarity or if there is near similarity
+        if (fingerprint not in fingerprint_set) and not near_duplicate:        
+            a_tags = soup.find_all("a", href=True)
+
+            for a_tag in a_tags:
+                link = a_tag.get('href')
+                # make sure crawler doesn't fall into a trap
+                if is_valid(link) and link not in frontier_urls and link not in visited_urls:
+                    links.append(link)
+                    frontier_urls.add(link)
+                    # find the index of the fragment
+                    end_index = link.find("#")
+                    link_without_fragment = link[0:end_index]
+                    if end_index < 0: # If no fragment
+                        unique_urls.add(link)
+                    else: # If fragment
+                        unique_urls.add(link_without_fragment)
+            
+            # add fingerprint to the set
+            fingerprint_set.add(fingerprint)      
+
+    write_result()
+
+    return links
 
 
 def is_valid(url):
@@ -57,7 +161,7 @@ def is_valid(url):
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        if ((".ics.uci.edu/" not in url) and (".cs.uci.edu/" not in url) and (".informatics.uci.edu/" not in url) and (".stat.uci.edu/" not in url)):
+        if ((".ics.uci.edu" not in url) and (".cs.uci.edu" not in url) and (".informatics.uci.edu" not in url) and (".stat.uci.edu" not in url)):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
@@ -74,20 +178,113 @@ def is_valid(url):
         raise
 
 
-def tokenize_text(text: str):
+def update_max(token_list, url):
+    """
+    Checks if the current document is larger than the existing largest document.
+    """
+    global max_file, max_page
+    token_size = len(token_list)
+    if token_size > max_file:
+        max_file = token_size
+        max_page = url
+
+
+def update_subdomains(url):
+    """
+    If the current url is in the subdomain list, it increments its count by 1.
+    """
+    if "ics.uci.edu" in url:
+        end_index = url.find("ics.uci.edu")
+        subdomain = url[0:end_index + 11]
+        if subdomain in subdomain_dict:  # if the subdomain exists, increment its number of unique pages
+                subdomain_dict[subdomain] += 1
+        else:  # if the subdomain doesn't exist, add it to the dictionary and update its number of unique pages
+            subdomain_dict[subdomain] = 1
+
+
+def tokenize_text(text: str) -> None:
+    """
+    Tokenize the text from the document. Find the top 50 words.
+    """
     lowercase_content = text.lower()  # convert all words to lowercase
-    tokens = re.split(r'[^a-zA-Z0-9]', lowercase_content.strip())  # tokens can only be alphanumeric
+    tokens = re.split(r"[^\w'-]", lowercase_content.strip())  # tokens can only be alphanumeric
     token_list = list(filter(None, tokens))
+    page_dict = {}
 
     try:
-        token_frequency = {}
+        # iterate through all tokens to find frequencies; find top 50 words
         for token in token_list:
-            if token in token_frequency:  # if the key exists, increment its frequency
-                token_frequency[token] += 1
-            else:  # if the key doesn't exist, add it to the dictionary and update its frequency
-                token_frequency[token] = 1
-        print(token_frequency)
-        sys.exit()
+            if token not in stop_words and len(token) > 1:
+                if token in token_frequency:  # if the key exists, increment its frequency
+                    token_frequency[token] += 1
+                else:  # if the key doesn't exist, add it to the dictionary and update its frequency
+                    token_frequency[token] = 1
+                if token in page_dict:  # if the key exists, increment its frequency
+                    page_dict[token] += 1
+                else:  # if the key doesn't exist, add it to the dictionary and update its frequency
+                    page_dict[token] = 1
+        return page_dict, token_list
     except Exception as e:
         print(e)
+
+
+def hash_word(word):
+    hash_value = 0
+    for char in word:
+        hash_value += ord(char)
+
+    hash_value %= 65536
+
+    bin_hash = bin(hash_value)[2:].zfill(16)
+    return bin_hash
+
+
+def checksum(tokens):
+    """
+    Calculate the checksum of each page
+    """
+    sum = 0
+    for token in tokens:
+        for char in token:
+            sum += ord(char)
+        sum &= 0xFF
+    return sum
+
+
+def simhash(page_dict: dict):
+    """
+    Detect similar documents. page_dict is every single word on a page with its frequency.
+    """
+    # tokenizing: steps a + b
+    word_hashes = {word: hash_word(word) for word in page_dict.keys()} # step c
+    summing_weights = []  # step d
+
+    # iterate through each words in page_dict
+    # access each index of each word to generate a vector of summing_weights
+    # general idea: word[index] + or - weight
+        # + if index is 1
+        # - if index is 0
+    # add all of the indexes of each word to summing_weights
+    for index in range(16):
+        sum = 0
+        for word in page_dict.keys():
+            # if the index is 0, subtract the word's weight to sum
+            if str(word_hashes[word])[index] == "0":
+                sum -= page_dict[word] 
+            # if the index is 1, add the word's weight to sum
+            elif str(word_hashes[word])[index] == "1":
+                sum += page_dict[word] 
+        summing_weights.append(sum)
+
+    fingerprint = []
+
+    # convert the summing weights to a binary fingerprint (step e)
+    for i in range(16):
+        if summing_weights[i] > 0:
+            fingerprint.append("1")
+        else:
+            fingerprint.append("0")
     
+    fingerprint = "".join(fingerprint)
+    print(fingerprint)
+    return fingerprint
