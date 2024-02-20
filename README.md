@@ -1,3 +1,21 @@
+TEAM MEMBERS
+-------------------------
+Clara Chen
+jiaxc1
+24284204
+
+Athena Rapinan
+arapinan
+14407188
+
+Juan Martinez
+juanrm3
+25805134
+
+Laila Wafaie
+lwafaie
+96015049
+
 ABOUT
 -------------------------
 This is the base implementation of a full crawler that uses a spacetime
